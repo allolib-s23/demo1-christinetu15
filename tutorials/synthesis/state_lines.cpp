@@ -509,63 +509,31 @@ public:
 
     void playTune(){
         // read json file
-        std::ifstream f("/Users/christinetu/projects/allolib/demo1-christinetu15/tutorials/synthesis/monday_demo.json");
-        // cout << "FILE" << endl;
-        // cout << f.rdbuf();
+        std::ifstream f("/Users/christinetu/projects/allolib/demo1-christinetu15/tutorials/synthesis/state_lines.json");
+
         json music = json::parse(f);
 
-        json violin = music["tracks"][0]["notes"];
-        json ensemble_violin = music["tracks"][1]["notes"];
-        json piano = music["tracks"][2]["notes"];
-        json bass_piano = music["tracks"][3]["notes"];
-        // json notes = music["tracks"];
+        json piano = music["tracks"][0]["notes"];
+        json guitar = music["tracks"][1]["notes"];
 
-        // for(auto note: violin) {
-        //     playGuitar(freq_of(note["midi"]), note["time"], note["duration"], note["velocity"], note["duration"]);
-        // }
-        // for(auto note: ensemble_violin) {
-        //     playGuitar(freq_of(note["midi"]), note["time"], note["duration"], note["velocity"], note["duration"]);
-        // }
-        // for(auto note: bass_piano) {
-        //     playGuitar(freq_of(note["midi"]), note["time"], note["duration"], note["velocity"], note["duration"]);
-        // }
-        // for(auto note: piano) {
-        //     playGuitar(freq_of(note["midi"]), note["time"], note["duration"], note["velocity"], note["duration"]);
-        // }
+        auto p = piano.begin();
+        auto g = guitar.begin();
 
-    auto v = violin.begin();
-    auto ev = ensemble_violin.begin();
-    auto p = piano.begin();
-    auto bp = bass_piano.begin();
-
-
-    while(v != violin.end() || ev != ensemble_violin.end() || p != piano.end() || bp != bass_piano.end())
-    {
-        if(v != violin.end())
+        while(p != piano.end() || g != guitar.end())
         {
-            auto note = *v;
-            playNote(freq_of(note["midi"]), note["time"], note["duration"], note["velocity"]);
-            ++v;
+            if(p != piano.end())
+            {
+                auto note = *p;
+                playNote(freq_of(note["midi"]), note["time"], note["duration"], note["velocity"]);
+                ++p;
+            }
+            if(g != guitar.end())
+            {
+                auto note = *g;
+                playGuitar(freq_of(note["midi"]), note["time"], note["duration"], note["velocity"]);
+                ++g;
+            }
         }
-        if(p != piano.end())
-        {
-            auto note = *p;
-            playGuitar(freq_of(note["midi"]), note["time"], note["duration"], note["velocity"]);
-            ++p;
-        }
-        if(bp != bass_piano.end())
-        {
-            auto note = *bp;
-            playGuitar(freq_of(note["midi"]), note["time"], note["duration"], note["velocity"]);
-            ++bp;
-        }
-        if(ev != ensemble_violin.end())
-        {
-            auto note = *ev;
-            playNote(freq_of(note["midi"]), note["time"], note["duration"], note["velocity"]);
-            ++ev;
-        }
-    }
 
     }
 

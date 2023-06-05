@@ -752,8 +752,9 @@ public:
   // GUI manager for SineEnv voices
   // The name provided determines the name of the directory
   // where the presets and sequences are stored
-  SynthGUIManager<SquareWave> synthManager{"SquareWave"};
-
+  SynthGUIManager<SquareWave> synthManager{"plunk"};
+  gam::STFT stft = gam::STFT(FFT_SIZE, FFT_SIZE / 4, 0, gam::HANN, gam::MAG_FREQ);
+  vector<float> spectrum;
   // This function is called right after the window is created
   // It provides a grphics context to initialize ParameterGUI
   // It's also a good place to put things that should
@@ -776,6 +777,19 @@ public:
   // The audio callback function. Called when audio hardware requires data
   void onSound(AudioIOData &io) override {
     synthManager.render(io); // Render audio
+
+    while (io())
+    {
+      if (stft(io.out(0)))
+      { // Loop through all the frequency bins
+          for (unsigned k = 0; k < stft.numBins(); ++k)
+          {
+              // Here we simply scale the complex sample
+              spectrum[k] = tanh(pow(stft.bin(k).real(), 1.3));
+              // spectrum[k] = stft.bin(k).real();
+          }
+      }
+    } 
   }
 
   void onAnimate(double dt) override {
@@ -848,6 +862,15 @@ public:
     synthManager.synthSequencer().addVoiceFromNow(voice, time, duration);
   }
 
+  void playGuitar(float freq, float time, float duration, float amp = .8, float attack = 0.8, float decay = 0.01)
+  {
+    auto *voice = synthManager.synth().getVoice<PluckedString>();
+    // amp, freq, attack, release, pan
+    vector<VariantValue> params = vector<VariantValue>({amp, freq, attack, decay, 0.0});
+    voice->setTriggerParams(params);
+    synthManager.synthSequencer().addVoiceFromNow(voice, time, duration);
+  }
+
   void playBass(float freq, float time, float duration, float amp = .9, float attack = 0.9, float decay = 0.001)
   {
     auto *voice = synthManager.synth().getVoice<SquareWave>();
@@ -877,6 +900,7 @@ public:
 
   // HELPERS AND CONSTANTS
   // EACH OCTAVE DOUBLES FREQUENCY!
+
   const float C5 =  261.6 * 2;
   const float Csharp5 = 277.183 * 2;
   const float D5 = 293.7 * 2;
@@ -888,6 +912,9 @@ public:
   const float A5 = 440.0 * 2;
   const float Aflat5 = 466.2 * 2;
   const float B5 = 493.88 * 2;
+
+  const float F6 =  F5 * 2;
+  const float C6 = C5 * 2;
 
   const float C4 =  261.6;
   const float Csharp4 = 277.183;
@@ -926,7 +953,7 @@ public:
   // Time
   const float bpm = 120;
   const float beat = 60 / bpm;
-  const float measure = beat * 4;
+  const float measure = beat * 2;
 
   const float whole = half * 2;
   const float half = beat * 2;
@@ -935,83 +962,39 @@ public:
   const float sixteenth = eigth / 2;
 
   // PARTS 
-  void pianoIntro(int start) {
-    playNote(Fsharp4, measure * 0 + beat * 0 + start, eigth);
-    playNote(Fsharp3, measure * 0 + beat * 0.5 + start, half);
-    playNote(A4, measure * 0 + beat * 1 + start, eigth);
-    playNote(E5, measure * 0 + beat * 1.5 + start, eigth);
-    playNote(Csharp5, measure * 0 + beat * 2 + start, eigth);
-    playNote(Fsharp4, measure * 0 + beat * 2.5 + start, eigth);
-    playNote(A4, measure * 0 + beat * 3 + start, eigth);
-    playNote(Fsharp4, measure * 0 + beat * 3.5 + start, eigth);
+  void guitarIntro(int start, int bars) {
+    playGuitar(C4, measure * 0 + beat * 0 + start, eigth);
+    playGuitar(B3, measure * 0 + beat * 0.5 + start, eigth);
+    playGuitar(G3, measure * 0 + beat * 1 + start, eigth);
+    playGuitar(D3, measure * 0 + beat * 1.5 + start, sixteenth);
 
-    playNote(E4, measure * 1 + beat * 0 + start, eigth);
-    playNote(E3, measure * 1 + beat * 0.5 + start, half);
-    playNote(Gsharp4, measure * 1 + beat * 1 + start, eigth);
-    playNote(E4, measure * 1 + beat * 1.5 + start, eigth);
-    playNote(B4, measure * 1 + beat * 2 + start, eigth);
-    playNote(A4, measure * 1 + beat * 2.5 + start, eigth);
-    playNote(Gsharp4, measure * 1 + beat * 3 + start, eigth);
-    playNote(A4, measure * 1 + beat * 3.5 + start, eigth);
-
-    playNote(A2, measure * 2 + beat * 0 + start, half);
-    playNote(A4, measure * 2 + beat * 0.5 + start, eigth);
-    playNote(Csharp5, measure * 2 + beat * 1 + start, eigth);
-    playNote(E5, measure * 2 + beat * 1.5 + start, eigth);
-    playNote(B4, measure * 2 + beat * 2 + start, eigth);
-    playNote(Csharp4, measure * 2 + beat * 2.5 + start, eigth);
-    playNote(B4, measure * 2 + beat * 3 + start, eigth);
-    playNote(A4, measure * 2 + beat * 3.5 + start, eigth);
-
-    playNote(D4, measure * 3 + beat * 0 + start, eigth);
-    playNote(D3, measure * 3 + beat * 0.5 + start, quarter);
-    playNote(A4, measure * 3 + beat * 1 + start, eigth);
-    playNote(Gsharp4, measure * 3 + beat * 1.5 + start, eigth);
-    playNote(E4, measure * 3 + beat * 2 + start, eigth);
-    playNote(E3, measure * 3 + beat * 2.5 + start, eigth);
-    playNote(Gsharp4, measure * 3 + beat * 3 + start, eigth);
-    playNote(A4, measure * 3 + beat * 3.5 + start, eigth);
+    for(int i=1; i<=bars; i++) {
+      playGuitar(C4, measure * i + beat * 0 + start, eigth + sixteenth);
+      playGuitar(B3, measure * i + beat * 0.75 + start, eigth);
+      playGuitar(G3, measure * i + beat * 1.25 + start, eigth);
+      playGuitar(D3, measure * i + beat * 1.75 + start, sixteenth);
+    }
   }
 
-  void bass(int start) {
-    playBass(Fsharp2, measure * 0 + beat * 0 + start, sixteenth);
-    playBass(Fsharp2, measure * 0 + beat * 0.5 + start, sixteenth);
-    playBass(Fsharp2, measure * 0 + beat * 1 + start, sixteenth);
-    playBass(Fsharp2, measure * 0 + beat * 1.5 + start, sixteenth);
-    playBass(Fsharp2, measure * 0 + beat * 2 + start, sixteenth);
-    playBass(Fsharp2, measure * 0 + beat * 2.5 + start, sixteenth);
-    playBass(Fsharp2, measure * 0 + beat * 3 + start, sixteenth);
-    playBass(Fsharp2, measure * 0 + beat * 3.5 + start, sixteenth);
+  void slideGuitar(int start) {
+    // playBass(Fsharp2, measure * 0 + beat * 0 + start, sixteenth);
+    // fsharp, g, d, d, b, b, a 
+    playNote(Fsharp4, measure * 0 + beat * 0 + start, quarter);
+    playNote(G4, measure * 0 + beat * 1 + start, half + quarter);
+    playNote(D5, measure * 2 + beat * 0 + start, quarter);
+    playNote(B4, measure * 2 + beat * 1 + start, half + quarter);
+    playNote(B4, measure * 4 + beat * 0 + start, quarter);
+    playNote(A4, measure * 4 + beat * 1 + start, half + quarter + whole);
 
-    playBass(E2, measure * 1 + beat * 0 + start, sixteenth);
-    playBass(E2, measure * 1 + beat * 0.5 + start, sixteenth);
-    playBass(E2, measure * 1 + beat * 1 + start, sixteenth);
-    playBass(E2, measure * 1 + beat * 1.5 + start, sixteenth);
-    playBass(E2, measure * 1 + beat * 2 + start, sixteenth);
-    playBass(E2, measure * 1 + beat * 2.5 + start, sixteenth);
-    playBass(E2, measure * 1 + beat * 3 + start, sixteenth);
-    playBass(E2, measure * 1 + beat * 3.5 + start, sixteenth);
-
-    playBass(A1, measure * 2 + beat * 0 + start, sixteenth);
-    playBass(A1, measure * 2 + beat * 0.5 + start, sixteenth);
-    playBass(A1, measure * 2 + beat * 1 + start, sixteenth);
-    playBass(A1, measure * 2 + beat * 1.5 + start, sixteenth);
-    playBass(A1, measure * 2 + beat * 2 + start, sixteenth);
-    playBass(A1, measure * 2 + beat * 2.5 + start, sixteenth);
-    playBass(A1, measure * 2 + beat * 3 + start, sixteenth);
-    playBass(A1, measure * 2 + beat * 3.5 + start, sixteenth);
-
-    playBass(D2, measure * 3 + beat * 0 + start, sixteenth);
-    playBass(D2, measure * 3 + beat * 0.5 + start, sixteenth);
-    playBass(D2, measure * 3 + beat * 1 + start, sixteenth);
-    playBass(D2, measure * 3 + beat * 1.5 + start, sixteenth);
-    playBass(E2, measure * 3 + beat * 2 + start, sixteenth);
-    playBass(E2, measure * 3 + beat * 2.5 + start, sixteenth);
-    playBass(E2, measure * 3 + beat * 3 + start, sixteenth);
-    playBass(E2, measure * 3 + beat * 3.5 + start, sixteenth);
+    playNote(Fsharp4, measure * 8 + beat * 0 + start, quarter);
+    playNote(G4, measure * 8 + beat * 1 + start, half + quarter);
+    playNote(D5, measure * 10 + beat * 0 + start, quarter);
+    playNote(B4, measure * 10 + beat * 1 + start, half + quarter);
+    playNote(B4, measure * 12 + beat * 0 + start, quarter);
+    playNote(Fsharp4, measure * 12 + beat * 1 + start, half + quarter + whole);
   }
 
-  void kickRhythm(int start) {
+  void kick(int start) {
     playKick(150, start);
     playKick(150, start + 0.5);
     playKick(150, start + 1);
@@ -1022,244 +1005,18 @@ public:
     playKick(150, start + 3.5);
   }
 
-  void synthChorus(int start) {
-    // synth chorus melody
-    // measure 1
-    playAddSyn(Fsharp2, measure * 0 + beat * 0 + start, eigth + sixteenth);
-    playAddSyn(Fsharp3, measure * 0 + beat * 0 + start, eigth + sixteenth);
-    playAddSyn(Fsharp4, measure * 0 + beat * 0 + start, eigth + sixteenth);
-    playAddSyn(A4, measure * 0 + beat * 0 + start, eigth + sixteenth);
 
-    playAddSyn(Fsharp2, measure * 0 + beat * 0.75 + start, eigth + sixteenth);
-    playAddSyn(Fsharp3, measure * 0 + beat * 0.75 + start, eigth + sixteenth);
-    playAddSyn(Fsharp4, measure * 0 + beat * 0.75 + start, eigth + sixteenth);
-    playAddSyn(Gsharp4, measure * 0 + beat * 0.75 + start, eigth + sixteenth);
-
-    playAddSyn(Fsharp2, measure * 0 + beat * 1.5 + start, quarter);
-    playAddSyn(Fsharp3, measure * 0 + beat * 1.5 + start, quarter);
-    playAddSyn(Fsharp4, measure * 0 + beat * 1.5 + start, quarter);
-    playAddSyn(A4, measure * 0 + beat * 1.5 + start, quarter);
-
-    playAddSyn(Fsharp2, measure * 0 + beat * 2.5 + start, eigth);
-    playAddSyn(Fsharp3, measure * 0 + beat * 2.5 + start, eigth);
-    playAddSyn(Fsharp4, measure * 0 + beat * 2.5 + start, eigth);
-    playAddSyn(Csharp5, measure * 0 + beat * 2.5 + start, eigth);
-
-    playAddSyn(Fsharp2, measure * 0 + beat * 3 + start, eigth);
-    playAddSyn(Fsharp3, measure * 0 + beat * 3 + start, eigth);
-    playAddSyn(Fsharp4, measure * 0 + beat * 3 + start, eigth);
-    playAddSyn(A4, measure * 0 + beat * 3 + start, eigth);
-
-    playAddSyn(Fsharp2, measure * 0 + beat * 3.5 + start, eigth);
-    playAddSyn(Fsharp3, measure * 0 + beat * 3.5 + start, eigth);
-    playAddSyn(Fsharp4, measure * 0 + beat * 3.5 + start, eigth);
-    playAddSyn(Gsharp4, measure * 0 + beat * 3.5 + start, eigth);
-
-    // measure 2
-    playAddSyn(A2, measure * 1 + beat * 0 + start, eigth + sixteenth);
-    playAddSyn(A3, measure * 1 + beat * 0 + start, eigth + sixteenth);
-    playAddSyn(E4, measure * 1 + beat * 0 + start, eigth + sixteenth);
-    playAddSyn(A4, measure * 1 + beat * 0 + start, eigth + sixteenth);
-
-    playAddSyn(A2, measure * 1 + beat * 0.75 + start, eigth + sixteenth);
-    playAddSyn(A3, measure * 1 + beat * 0.75 + start, eigth + sixteenth);
-    playAddSyn(E4, measure * 1 + beat * 0.75 + start, eigth + sixteenth);
-    playAddSyn(Gsharp4, measure * 1 + beat * 0.75 + start, eigth + sixteenth);
-
-    playAddSyn(A2, measure * 1 + beat * 1.5 + start, quarter);
-    playAddSyn(A3, measure * 1 + beat * 1.5 + start, quarter);
-    playAddSyn(E4, measure * 1 + beat * 1.5 + start, quarter);
-    playAddSyn(A4, measure * 1 + beat * 1.5 + start, quarter);
-
-    playAddSyn(A2, measure * 1 + beat * 2.5 + start, eigth);
-    playAddSyn(A3, measure * 1 + beat * 2.5 + start, eigth);
-    playAddSyn(Gsharp4, measure * 1 + beat * 2.5 + start, eigth);
-
-    playAddSyn(A2, measure * 1 + beat * 3 + start, eigth);
-    playAddSyn(A3, measure * 1 + beat * 3 + start, eigth);
-    playAddSyn(A4, measure * 1 + beat * 3 + start, eigth);
-
-    playAddSyn(A2, measure * 1 + beat * 3.5 + start, eigth);
-    playAddSyn(A3, measure * 1 + beat * 3.5 + start, eigth);
-    playAddSyn(E4, measure * 1 + beat * 3.5 + start, eigth);
-
-    // measure 3
-    playAddSyn(E2, measure * 2 + beat * 0 + start, eigth + sixteenth);
-    playAddSyn(E3, measure * 2 + beat * 0 + start, eigth + sixteenth);
-    playAddSyn(E4, measure * 2 + beat * 0 + start, eigth + sixteenth);
-    playAddSyn(A4, measure * 2 + beat * 0 + start, eigth + sixteenth);
-
-    playAddSyn(E2, measure * 2 + beat * 0.75 + start, eigth + sixteenth);
-    playAddSyn(E3, measure * 2 + beat * 0.75 + start, eigth + sixteenth);
-    playAddSyn(E4, measure * 2 + beat * 0.75 + start, eigth + sixteenth);
-    playAddSyn(Gsharp4, measure * 2 + beat * 0.75 + start, eigth + sixteenth);
-
-    playAddSyn(E2, measure * 2 + beat * 1.5 + start, quarter);
-    playAddSyn(E3, measure * 2 + beat * 1.5 + start, quarter);
-    playAddSyn(E4, measure * 2 + beat * 1.5 + start, quarter);
-    playAddSyn(A4, measure * 2 + beat * 1.5 + start, quarter);
-
-    playAddSyn(E2, measure * 2 + beat * 2.5 + start, eigth);
-    playAddSyn(E3, measure * 2 + beat * 2.5 + start, eigth);
-    playAddSyn(Csharp5, measure * 2 + beat * 2.5 + start, eigth);
-
-    playAddSyn(E2, measure * 2 + beat * 3 + start, eigth);
-    playAddSyn(E3, measure * 2 + beat * 3 + start, eigth);
-    playAddSyn(A4, measure * 2 + beat * 3 + start, eigth);
-
-    playAddSyn(E2, measure * 2 + beat * 3.5 + start, eigth);
-    playAddSyn(E3, measure * 2 + beat * 3.5 + start, eigth);
-    playAddSyn(Gsharp4, measure * 2 + beat * 3.5 + start, eigth);
-
-
-    // measure 4
-    playAddSyn(D2, measure * 3 + beat * 0 + start, eigth + sixteenth);
-    playAddSyn(D3, measure * 3 + beat * 0 + start, eigth + sixteenth);
-    playAddSyn(D4, measure * 3 + beat * 0 + start, eigth + sixteenth);
-    playAddSyn(A4, measure * 3 + beat * 0 + start, eigth + sixteenth);
-
-    playAddSyn(D2, measure * 3 + beat * 0.75 + start, eigth + sixteenth);
-    playAddSyn(D3, measure * 3 + beat * 0.75 + start, eigth + sixteenth);
-    playAddSyn(D4, measure * 3 + beat * 0.75 + start, eigth + sixteenth);
-    playAddSyn(Gsharp4, measure * 3 + beat * 0.75 + start, eigth + sixteenth);
-
-    playAddSyn(D2, measure * 3 + beat * 1.5 + start, quarter);
-    playAddSyn(D3, measure * 3 + beat * 1.5 + start, quarter);
-    playAddSyn(D4, measure * 3 + beat * 1.5 + start, quarter);
-    playAddSyn(A4, measure * 3 + beat * 1.5 + start, quarter);
-
-    playAddSyn(D2, measure * 3 + beat * 2.5 + start, eigth);
-    playAddSyn(D3, measure * 3 + beat * 2.5 + start, eigth);
-    playAddSyn(Gsharp4, measure * 3 + beat * 2.5 + start, eigth);
-
-    playAddSyn(D2, measure * 3 + beat * 3 + start, eigth);
-    playAddSyn(D3, measure * 3 + beat * 3 + start, eigth);
-    playAddSyn(A4, measure * 3 + beat * 3 + start, eigth);
-
-    playAddSyn(D2, measure * 3 + beat * 3.5 + start, eigth);
-    playAddSyn(D3, measure * 3 + beat * 3.5 + start, eigth);
-    playAddSyn(Gsharp4, measure * 3 + beat * 3.5 + start, eigth);
-  }
-
-  void synthCounter(int bpm, float vol) {
-    // synth chorus countermelody
+  void snare(int start) {
 
   }
 
-  void riserSnare(int start) {
-    // riser snare from piano intro to synth chorus
-    // 2 bars eigth notes, 1 bar 16th notes, 1 bar 32nd notes
-
-    playSnare(measure * 0 + beat * 0 + start);
-    playSnare(measure * 0 + beat * 0.5 + start);
-    playSnare(measure * 0 + beat * 1 + start);
-    playSnare(measure * 0 + beat * 1.5 + start);
-    playSnare(measure * 0 + beat * 2 + start);
-    playSnare(measure * 0 + beat * 2.5 + start);
-    playSnare(measure * 0 + beat * 3 + start);
-    playSnare(measure * 0 + beat * 3.5 + start);
-
-    playSnare(measure * 1 + beat * 0 + start);
-    playSnare(measure * 1 + beat * 0.5 + start);
-    playSnare(measure * 1 + beat * 1 + start);
-    playSnare(measure * 1 + beat * 1.5 + start);
-    playSnare(measure * 1 + beat * 2 + start);
-    playSnare(measure * 1 + beat * 2.5 + start);
-    playSnare(measure * 1 + beat * 3 + start);
-    playSnare(measure * 1 + beat * 3.5 + start);
-
-    playSnare(measure * 2 + beat * 0 + start);
-    playSnare(measure * 2 + beat * 0.25 + start);
-    playSnare(measure * 2 + beat * 0.5 + start);
-    playSnare(measure * 2 + beat * 0.75 + start);
-    playSnare(measure * 2 + beat * 1 + start);
-    playSnare(measure * 2 + beat * 1.25 + start);
-    playSnare(measure * 2 + beat * 1.5 + start);
-    playSnare(measure * 2 + beat * 1.75 + start);
-    playSnare(measure * 2 + beat * 2 + start);
-    playSnare(measure * 2 + beat * 2.25 + start);
-    playSnare(measure * 2 + beat * 2.5 + start);
-    playSnare(measure * 2 + beat * 2.75 + start);
-    playSnare(measure * 2 + beat * 3 + start);
-    playSnare(measure * 2 + beat * 3.25 + start);
-    playSnare(measure * 2 + beat * 3.5 + start);
-    playSnare(measure * 2 + beat * 3.75 + start);
-
-    playSnare(measure * 3 + beat * 0 + start);
-    playSnare(measure * 3 + beat * 0.125 + start);
-    playSnare(measure * 3 + beat * 0.25 + start);
-    playSnare(measure * 3 + beat * 0.375 + start);
-    playSnare(measure * 3 + beat * 0.5 + start);
-    playSnare(measure * 3 + beat * 0.675 + start);
-    playSnare(measure * 3 + beat * 0.75 + start);
-    playSnare(measure * 3 + beat * 0.875 + start);
-    playSnare(measure * 3 + beat * 1 + start);
-    playSnare(measure * 3 + beat * 1.125 + start);
-    playSnare(measure * 3 + beat * 1.25 + start);
-    playSnare(measure * 3 + beat * 1.375 + start);
-    playSnare(measure * 3 + beat * 1.5 + start);
-    playSnare(measure * 3 + beat * 1.675 + start);
-    playSnare(measure * 3 + beat * 1.75 + start);
-    playSnare(measure * 3 + beat * 1.875 + start);
-    playSnare(measure * 3 + beat * 2 + start);
-    playSnare(measure * 3 + beat * 2.125 + start);
-    playSnare(measure * 3 + beat * 2.25 + start);
-    playSnare(measure * 3 + beat * 2.375 + start);
-    playSnare(measure * 3 + beat * 2.5 + start);
-    playSnare(measure * 3 + beat * 2.675 + start);
-    playSnare(measure * 3 + beat * 2.75 + start);
-    playSnare(measure * 3 + beat * 2.875 + start);
-    playSnare(measure * 3 + beat * 3 + start);
-    playSnare(measure * 3 + beat * 3.125 + start);
-    playSnare(measure * 3 + beat * 3.25 + start);
-    playSnare(measure * 3 + beat * 3.375 + start);
-    playSnare(measure * 3 + beat * 3.5 + start);
-    playSnare(measure * 3 + beat * 3.675 + start);
-    playSnare(measure * 3 + beat * 3.75 + start);
-    playSnare(measure * 3 + beat * 3.875 + start);
-  }
-
-  void rhythmSnare(int start) {
-    playSnare(measure * 0 + beat * 0 + start);
-    playSnare(measure * 0 + beat * 0.5 + start);
-    playSnare(measure * 0 + beat * 1 + start);
-    playSnare(measure * 0 + beat * 1.5 + start);
-    playSnare(measure * 0 + beat * 2 + start);
-    playSnare(measure * 0 + beat * 2.5 + start);
-    playSnare(measure * 0 + beat * 3 + start);
-    playSnare(measure * 0 + beat * 3.5 + start);
+  void hihat(int start) {
 
   }
 
-  void playTune(){ //one measure of drums, then the tune!
-    for(int i=0; i<24; i++) {
-      if (i % 8 == 0) {
-        pianoIntro(i);
-      }
-    }
-    for (int i=8; i<40; i++) {
-      if(i % 4 == 0) {
-        kickRhythm(i);
-      }
-    }
-    for(int i=16; i<24; i++) {
-      if(i % 8 == 0) {
-        riserSnare(i);
-      }
-    }
-    for(int i=24; i<40; i++) {
-      if(i % 8 == 0) {
-        synthChorus(i);
-      }
-    }
-    for(int i=24; i<40; i++) {
-      rhythmSnare(i);
-    }
-    for(int i=40; i<48; i++) {
-      if (i % 8 == 0) {
-        pianoIntro(i);
-      }
-    }
+  void playTune(){
+    guitarIntro(0, 10);
+    // slideGuitar(4);
   }
 
 };

@@ -32,66 +32,13 @@
 #include <fstream>
 using json = nlohmann::json;
 
-const float C5 =  261.6 * 2;
-const float Csharp5 = 277.183 * 2;
-const float D5 = 293.7 * 2;
-const float E5 = 329.6 * 2;
-const float F5 = 349.2 * 2;
-const float Fsharp5 = 369.994 * 2;
-const float G5 = 392.0 * 2;
-const float Gsharp5 = 415.305 * 2;
-const float A5 = 440.0 * 2;
-const float Aflat5 = 466.2 * 2;
-const float B5 = 493.88 * 2;
-
-const float F6 =  F5 * 2;
 // const float C6 = C5 * 2;
-
-const float C4 =  261.6;
-const float Csharp4 = 277.183;
-const float D4 = 293.7;
-const float E4 = 329.6;
-const float F4 = 349.2;
-const float Fsharp4 = 369.994;
-const float G4 = 392.0;
-const float Gsharp4 = 415.305;
-const float A4 = 440.0;
-const float Aflat4 = 466.2;
-const float B4 = 493.88;
-
-const float C3 = C4 / 2;
-const float D3 = D4 / 2;
-const float E3 = E4 / 2;
-const float F3 = F4 / 2;
-const float Fsharp3 = Fsharp4 / 2;
-const float G3 = G4 / 2;
-const float A3 = A4 / 2;
-const float Aflat3 = Aflat4 / 2;
-const float B3 = B4 / 2;
-
-const float C2 = C3 / 2;
-const float D2 = D3 / 2;
-const float E2 = E3 / 2;
-const float F2 = F3 / 2;
-const float Fsharp2 = Fsharp3 / 2;
-const float G2 = G3 / 2;
-const float A2 = A3 / 2;
-const float Aflat2 = Aflat3 / 2;
-const float B2 = B3 / 2;
-
-const float A1 = A2 / 2;
 
 // Time
 const float bpm = 150;
 const float beat = 60 / bpm;
 const float measure = beat * 4;
 
-
-const float half = beat * 2;
-const float whole = half * 2;
-const float quarter = beat;
-const float eigth = quarter / 2;
-const float sixteenth = eigth / 2;
 
 // using namespace gam;
 using namespace al;
@@ -502,68 +449,50 @@ public:
         auto *voice = synthManager.synth().getVoice<SquareWave>();
         // amp, freq, attack, release, pan
         vector<VariantValue> params = vector<VariantValue>({amp, freq, attack, decay, 0.0});
-        voice->setTriggerParams(params);
+        voice->setInternalParameterValue("frequency", freq);
+        voice->setInternalParameterValue("amplitude", amp);
+        voice->setInternalParameterValue("attack", attack);
+        voice->setInternalParameterValue("decay", decay);
+
         synthManager.synthSequencer().addVoiceFromNow(voice, time, duration);
     }
 
 
     void playTune(){
         // read json file
-        std::ifstream f("/Users/christinetu/projects/allolib/demo1-christinetu15/tutorials/synthesis/monday_demo.json");
+        std::ifstream f("/Users/christinetu/projects/allolib/demo1-christinetu15/tutorials/synthesis/botw.json");
         // cout << "FILE" << endl;
         // cout << f.rdbuf();
         json music = json::parse(f);
 
-        json violin = music["tracks"][0]["notes"];
-        json ensemble_violin = music["tracks"][1]["notes"];
-        json piano = music["tracks"][2]["notes"];
-        json bass_piano = music["tracks"][3]["notes"];
-        // json notes = music["tracks"];
+        json flute = music["tracks"][0]["notes"];
+        json treble_piano = music["tracks"][1]["notes"];
+        json bass_piano = music["tracks"][2]["notes"];
 
-        // for(auto note: violin) {
-        //     playGuitar(freq_of(note["midi"]), note["time"], note["duration"], note["velocity"], note["duration"]);
-        // }
-        // for(auto note: ensemble_violin) {
-        //     playGuitar(freq_of(note["midi"]), note["time"], note["duration"], note["velocity"], note["duration"]);
-        // }
-        // for(auto note: bass_piano) {
-        //     playGuitar(freq_of(note["midi"]), note["time"], note["duration"], note["velocity"], note["duration"]);
-        // }
-        // for(auto note: piano) {
-        //     playGuitar(freq_of(note["midi"]), note["time"], note["duration"], note["velocity"], note["duration"]);
-        // }
-
-    auto v = violin.begin();
-    auto ev = ensemble_violin.begin();
-    auto p = piano.begin();
+    auto fl = flute.begin();
+    auto tp = treble_piano.begin();
     auto bp = bass_piano.begin();
 
 
-    while(v != violin.end() || ev != ensemble_violin.end() || p != piano.end() || bp != bass_piano.end())
+    while(fl != flute.end() || tp != treble_piano.end() || bp != bass_piano.end())
     {
-        if(v != violin.end())
+        if(fl != flute.end())
         {
-            auto note = *v;
+            auto note = *fl;
             playNote(freq_of(note["midi"]), note["time"], note["duration"], note["velocity"]);
-            ++v;
+            ++fl;
         }
-        if(p != piano.end())
+        if(tp != treble_piano.end())
         {
-            auto note = *p;
+            auto note = *tp;
             playGuitar(freq_of(note["midi"]), note["time"], note["duration"], note["velocity"]);
-            ++p;
+            ++tp;
         }
         if(bp != bass_piano.end())
         {
             auto note = *bp;
             playGuitar(freq_of(note["midi"]), note["time"], note["duration"], note["velocity"]);
             ++bp;
-        }
-        if(ev != ensemble_violin.end())
-        {
-            auto note = *ev;
-            playNote(freq_of(note["midi"]), note["time"], note["duration"], note["velocity"]);
-            ++ev;
         }
     }
 
@@ -575,7 +504,7 @@ public:
         //    synthManager.synthSequencer().playSequence("synth8.synthSequence");
         synthManager.synthRecorder().verbose(true);
 
-        playTune();
+        // playTune();
     }
 
     void onSound(AudioIOData &io) override
@@ -685,6 +614,8 @@ public:
         }
         switch (k.key())
         {
+        case 'p':
+        playTune();
         case ']':
         showGUI = !showGUI;
         break;
