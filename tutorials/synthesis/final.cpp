@@ -52,6 +52,104 @@ float freq_of(int midi) {
     return freq;
 } 
 
+class FM : public SynthVoice {
+ public:
+  // Unit generators
+  gam::Pan<> mPan;
+  gam::ADSR<> mAmpEnv;
+  gam::ADSR<> mModEnv;
+  gam::EnvFollow<> mEnvFollow;
+
+  gam::Sine<> car, mod;  // carrier, modulator sine oscillators
+
+  // Additional members
+  Mesh mMesh;
+
+  void init() override {
+    //      mAmpEnv.curve(0); // linear segments
+    mAmpEnv.levels(0, 1, 1, 0);
+
+    // We have the mesh be a sphere
+    addDisc(mMesh, 1.0, 30);
+
+    createInternalTriggerParameter("freq", 440, 10, 4000.0);
+    createInternalTriggerParameter("amplitude", 0.306000, 0.0, .75);
+    createInternalTriggerParameter("attackTime", 0.010000, 0.01, 3.0);
+    createInternalTriggerParameter("releaseTime", 0.100000, 0.1, 10.0);
+    createInternalTriggerParameter("sustain", 0.751000, 0.1, 1.0);  // Unused
+
+    // FM index
+    createInternalTriggerParameter("idx1", 10.000000, 0.0, 10.0);
+    createInternalTriggerParameter("idx2", 0, 0.0, 10.0);
+    createInternalTriggerParameter("idx3", 0, 0.0, 10.0);
+
+    createInternalTriggerParameter("carMul", 1.255000 , 0.0, 20.0);
+    createInternalTriggerParameter("modMul", 7.059000, 0.0, 20.0);
+
+    createInternalTriggerParameter("pan", 0.0, -1.0, 1.0);
+  }
+
+  //
+  void onProcess(AudioIOData& io) override {
+    float modFreq =
+        getInternalParameterValue("freq") * getInternalParameterValue("modMul");
+    mod.freq(modFreq);
+    float carBaseFreq =
+        getInternalParameterValue("freq") * getInternalParameterValue("carMul");
+    float modScale =
+        getInternalParameterValue("freq") * getInternalParameterValue("modMul");
+    float amp = getInternalParameterValue("amplitude");
+    while (io()) {
+      car.freq(carBaseFreq + mod() * mModEnv() * modScale);
+      float s1 = car() * mAmpEnv() * amp;
+      float s2;
+      mEnvFollow(s1);
+      mPan(s1, s1, s2);
+      io.out(0) += s1;
+      io.out(1) += s2;
+    }
+    if (mAmpEnv.done() && (mEnvFollow.value() < 0.001)) free();
+  }
+
+  void onProcess(Graphics& g) override {
+    g.pushMatrix();
+    g.translate(getInternalParameterValue("freq") / 300 - 2,
+                getInternalParameterValue("modAmt") / 25 - 1, -4);
+    float scaling = getInternalParameterValue("amplitude") * 1;
+    g.scale(scaling, scaling, scaling * 1);
+    g.color(HSV(getInternalParameterValue("modMul") / 20, 1,
+                mEnvFollow.value() * 10));
+    g.draw(mMesh);
+    g.popMatrix();
+  }
+
+  void onTriggerOn() override {
+    mModEnv.levels()[0] = getInternalParameterValue("idx1");
+    mModEnv.levels()[1] = getInternalParameterValue("idx2");
+    mModEnv.levels()[2] = getInternalParameterValue("idx2");
+    mModEnv.levels()[3] = getInternalParameterValue("idx3");
+
+    mAmpEnv.lengths()[0] = getInternalParameterValue("attackTime");
+    mModEnv.lengths()[0] = getInternalParameterValue("attackTime");
+
+    mAmpEnv.lengths()[1] = 0.001;
+    mModEnv.lengths()[1] = 0.001;
+
+    mAmpEnv.lengths()[2] = getInternalParameterValue("releaseTime");
+    mModEnv.lengths()[2] = getInternalParameterValue("releaseTime");
+    mPan.pos(getInternalParameterValue("pan"));
+
+    //        mModEnv.lengths()[1] = mAmpEnv.lengths()[1];
+
+    mAmpEnv.reset();
+    mModEnv.reset();
+  }
+  void onTriggerOff() override {
+    mAmpEnv.triggerRelease();
+    mModEnv.triggerRelease();
+  }
+};
+
 class PluckedString : public SynthVoice
 {
 public:
@@ -89,7 +187,7 @@ public:
         delay.delay(1. / 440.0);
 
         addDisc(mMesh, 1.0, 30);
-        createInternalTriggerParameter("amplitude", 0.1, 0.0, 1.0);
+        createInternalTriggerParameter("amplitude", 0.1, 0.0, .8);
         createInternalTriggerParameter("frequency", 60, 20, 5000);
         createInternalTriggerParameter("attackTime", 0.001, 0.001, 1.0);
         createInternalTriggerParameter("releaseTime", 3.0, 0.1, 10.0);
@@ -195,76 +293,6 @@ public:
     }
 };
 
-class SquareWave : public SynthVoice
-{
-public:
-  // Unit generators
-  gam::Pan<> mPan;
-  gam::Sine<> mOsc1;
-  gam::Sine<> mOsc3;
-  gam::Sine<> mOsc5;
-
-  gam::Env<3> mAmpEnv;
-
-  // Initialize voice. This function will only be called once per voice when
-  // it is created. Voices will be reused if they are idle.
-  void init() override
-  {
-    // Intialize envelope
-    mAmpEnv.curve(0); // make segments lines
-    mAmpEnv.levels(0, 1, 1, 0);
-    mAmpEnv.sustainPoint(2); // Make point 2 sustain until a release is issued
-
-    createInternalTriggerParameter("amplitude", 0.8, 0.0, 1.0);
-    createInternalTriggerParameter("frequency", 440, 20, 5000);
-    createInternalTriggerParameter("attackTime", 0.1, 0.01, 3.0);
-    createInternalTriggerParameter("releaseTime", 0.1, 0.1, 10.0);
-    createInternalTriggerParameter("pan", 0.0, -1.0, 1.0);
-  }
-
-  // The audio processing function
-  void onProcess(AudioIOData &io) override
-  {
-    // Get the values from the parameters and apply them to the corresponding
-    // unit generators. You could place these lines in the onTrigger() function,
-    // but placing them here allows for realtime prototyping on a running
-    // voice, rather than having to trigger a new voice to hear the changes.
-    // Parameters will update values once per audio callback because they
-    // are outside the sample processing loop.
-    float f = getInternalParameterValue("frequency");
-    mOsc1.freq(f);
-    mOsc3.freq(f * 3);
-    mOsc5.freq(f * 5);
-
-    float a = getInternalParameterValue("amplitude");
-    mAmpEnv.lengths()[0] = getInternalParameterValue("attackTime");
-    mAmpEnv.lengths()[2] = getInternalParameterValue("releaseTime");
-    mPan.pos(getInternalParameterValue("pan"));
-    while (io())
-    {
-      float s1 = mAmpEnv() * (mOsc1() * a +
-                              mOsc3() * (a / 3.0) +
-                              mOsc5() * (a / 5.0));
-
-      float s2;
-      mPan(s1, s1, s2);
-      io.out(0) += s1;
-      io.out(1) += s2;
-    }
-    // We need to let the synth know that this voice is done
-    // by calling the free(). This takes the voice out of the
-    // rendering chain
-    if (mAmpEnv.done())
-      free();
-  }
-
-  // The triggering functions just need to tell the envelope to start or release
-  // The audio processing function checks when the envelope is done to remove
-  // the voice from the processing chain.
-  void onTriggerOn() override { mAmpEnv.reset(); }
-  void onTriggerOff() override { mAmpEnv.release(); }
-};
-
 class Sub : public SynthVoice {
 public:
 
@@ -292,22 +320,22 @@ public:
         // We have the mesh be a sphere
         addDisc(mMesh, 1.0, 30);
 
-        createInternalTriggerParameter("amplitude", 0.3, 0.0, 1.0);
-        createInternalTriggerParameter("frequency", 60, 20, 5000);
-        createInternalTriggerParameter("attackTime", 0.1, 0.01, 3.0);
-        createInternalTriggerParameter("releaseTime", 3.0, 0.1, 10.0);
-        createInternalTriggerParameter("sustain", 0.7, 0.0, 1.0);
-        createInternalTriggerParameter("curve", 4.0, -10.0, 10.0);
-        createInternalTriggerParameter("noise", 0.0, 0.0, 1.0);
-        createInternalTriggerParameter("envDur",1, 0.0, 5.0);
-        createInternalTriggerParameter("cf1", 400.0, 10.0, 5000);
-        createInternalTriggerParameter("cf2", 400.0, 10.0, 5000);
-        createInternalTriggerParameter("cfRise", 0.5, 0.1, 2);
-        createInternalTriggerParameter("bw1", 700.0, 10.0, 5000);
-        createInternalTriggerParameter("bw2", 900.0, 10.0, 5000);
-        createInternalTriggerParameter("bwRise", 0.5, 0.1, 2);
-        createInternalTriggerParameter("hmnum", 12.0, 5.0, 20.0);
-        createInternalTriggerParameter("hmamp", 1.0, 0.0, 1.0);
+        createInternalTriggerParameter("amplitude", 0.185000, 0.0, 0.25);
+        createInternalTriggerParameter("frequency", 203.876846, 20, 5000);
+        createInternalTriggerParameter("attackTime", 0.010000, 0.01, 3.0);
+        createInternalTriggerParameter("releaseTime", 0.100000, 0.1, 10.0);
+        createInternalTriggerParameter("sustain", 0.695000, 0.0, 1.0);
+        createInternalTriggerParameter("curve", 2.721000, -10.0, 10.0);
+        createInternalTriggerParameter("noise", 0.012000, 0.0, 1.0);
+        createInternalTriggerParameter("envDur", 0.610000, 0.0, 5.0);
+        createInternalTriggerParameter("cf1", 2214.087891, 10.0, 5000);
+        createInternalTriggerParameter("cf2", 1700.713013, 10.0, 5000);
+        createInternalTriggerParameter("cfRise", 0.538000, 0.1, 2);
+        createInternalTriggerParameter("bw1", 4267.585938, 10.0, 5000);
+        createInternalTriggerParameter("bw2", 3446.187012, 10.0, 5000);
+        createInternalTriggerParameter("bwRise", 0.681000, 0.1, 2);
+        createInternalTriggerParameter("hmnum", 6.235000, 5.0, 20.0);
+        createInternalTriggerParameter("hmamp", 0.461000, 0.0, 1.0);
         createInternalTriggerParameter("pan", 0.0, -1.0, 1.0);
 
     }
@@ -395,6 +423,76 @@ public:
     }
 };
 
+class SquareWave : public SynthVoice
+{
+public:
+  // Unit generators
+  gam::Pan<> mPan;
+  gam::Sine<> mOsc1;
+  gam::Sine<> mOsc3;
+  gam::Sine<> mOsc5;
+
+  gam::Env<3> mAmpEnv;
+
+  // Initialize voice. This function will only be called once per voice when
+  // it is created. Voices will be reused if they are idle.
+  void init() override
+  {
+    // Intialize envelope
+    mAmpEnv.curve(0); // make segments lines
+    mAmpEnv.levels(0, 1, 1, 0);
+    mAmpEnv.sustainPoint(2); // Make point 2 sustain until a release is issued
+
+    createInternalTriggerParameter("amplitude", 0.25, 0.0, 0.25);
+    createInternalTriggerParameter("frequency", 440, 20, 5000);
+    createInternalTriggerParameter("attackTime", 0.1, 0.01, 3.0);
+    createInternalTriggerParameter("releaseTime", 0.1, 0.1, 10.0);
+    createInternalTriggerParameter("pan", 0.0, -1.0, 1.0);
+  }
+
+  // The audio processing function
+  void onProcess(AudioIOData &io) override
+  {
+    // Get the values from the parameters and apply them to the corresponding
+    // unit generators. You could place these lines in the onTrigger() function,
+    // but placing them here allows for realtime prototyping on a running
+    // voice, rather than having to trigger a new voice to hear the changes.
+    // Parameters will update values once per audio callback because they
+    // are outside the sample processing loop.
+    float f = getInternalParameterValue("frequency");
+    mOsc1.freq(f);
+    mOsc3.freq(f * 3);
+    mOsc5.freq(f * 5);
+
+    float a = getInternalParameterValue("amplitude");
+    mAmpEnv.lengths()[0] = getInternalParameterValue("attackTime");
+    mAmpEnv.lengths()[2] = getInternalParameterValue("releaseTime");
+    mPan.pos(getInternalParameterValue("pan"));
+    while (io())
+    {
+      float s1 = mAmpEnv() * (mOsc1() * a +
+                              mOsc3() * (a / 3.0) +
+                              mOsc5() * (a / 5.0));
+
+      float s2;
+      mPan(s1, s1, s2);
+      io.out(0) += s1;
+      io.out(1) += s2;
+    }
+    // We need to let the synth know that this voice is done
+    // by calling the free(). This takes the voice out of the
+    // rendering chain
+    if (mAmpEnv.done())
+      free();
+  }
+
+  // The triggering functions just need to tell the envelope to start or release
+  // The audio processing function checks when the envelope is done to remove
+  // the voice from the processing chain.
+  void onTriggerOn() override { mAmpEnv.reset(); }
+  void onTriggerOff() override { mAmpEnv.release(); }
+};
+
 class MyApp : public App, public MIDIMessageHandler
 {
 public:
@@ -414,6 +512,9 @@ public:
         navControl().active(false); // Disable navigation via keyboard, since we
                                     // will be using keyboard for note triggering
         // Set sampling rate for Gamma objects from app's audio
+
+        // bool check = Image::load("haven.png");
+
         gam::sampleRate(audioIO().framesPerSecond());
         // Check for connected MIDI devices
         if (midiIn.getPortCount() > 0)
@@ -446,6 +547,28 @@ public:
         synthManager.synthSequencer().addVoiceFromNow(voice, time, duration);
     }
 
+    void playKalimba(float freq, float time, float duration, float amp = 0.4)
+    {
+        auto *voice = synthManager.synth().getVoice<FM>();
+
+        voice->setInternalParameterValue("frequency", freq);
+        voice->setInternalParameterValue("amplitude", amp);
+        // voice->setInternalParameterValue("sustain", sus);
+
+        synthManager.synthSequencer().addVoiceFromNow(voice, time, duration);
+    }
+
+    void playRhodes(float freq, float time, float duration, float amp = 0.4)
+    {
+        auto *voice = synthManager.synth().getVoice<Sub>();
+
+        voice->setInternalParameterValue("frequency", freq);
+        voice->setInternalParameterValue("amplitude", amp);
+        // voice->setInternalParameterValue("sustain", sus);
+
+        synthManager.synthSequencer().addVoiceFromNow(voice, time, duration);
+    }
+
     void playNote(float freq, float time, float duration, float amp = .1, float attack = 0.1, float decay = 0.2)
     {
         auto *voice = synthManager.synth().getVoice<SquareWave>();
@@ -462,39 +585,34 @@ public:
 
     void playTune(){
         // read json file
-        std::ifstream f("/Users/christinetu/projects/allolib/demo1-christinetu15/tutorials/synthesis/botw.json");
+        std::ifstream f("/Users/christinetu/projects/allolib/demo1-christinetu15/tutorials/synthesis/mipha2.json");
         // cout << "FILE" << endl;
         // cout << f.rdbuf();
         json music = json::parse(f);
 
-        json flute = music["tracks"][0]["notes"];
-        json treble_piano = music["tracks"][1]["notes"];
-        json bass_piano = music["tracks"][2]["notes"];
+        json guitar = music["tracks"][0]["notes"];
+        json banjo = music["tracks"][1]["notes"];
 
-    auto fl = flute.begin();
-    auto tp = treble_piano.begin();
-    auto bp = bass_piano.begin();
+    auto g = guitar.begin();
+    auto b = banjo.begin();
 
 
-    while(fl != flute.end() || tp != treble_piano.end() || bp != bass_piano.end())
+    while(g != guitar.end() || b != banjo.end())
     {
-        if(fl != flute.end())
+        if(g != guitar.end())
         {
-            auto note = *fl;
-            playNote(freq_of(note["midi"]), note["time"], note["duration"], note["velocity"]);
-            ++fl;
+            auto note = *g;
+            // playNote(freq_of(note["midi"]), note["time"], note["duration"], note["velocity"]);
+            playRhodes(freq_of(note["midi"]), note["time"], note["duration"], note["velocity"]);
+            ++g;
         }
-        if(tp != treble_piano.end())
+        if(b != banjo.end())
         {
-            auto note = *tp;
-            playGuitar(freq_of(note["midi"]), note["time"], note["duration"], note["velocity"]);
-            ++tp;
-        }
-        if(bp != bass_piano.end())
-        {
-            auto note = *bp;
-            playGuitar(freq_of(note["midi"]), note["time"], note["duration"], note["velocity"]);
-            ++bp;
+            auto note = *b;
+            // playGuitar(freq_of(note["midi"]), note["time"], note["duration"], note["velocity"]);
+            // playNote(freq_of(note["midi"]), note["time"], note["duration"], note["velocity"]);
+            playRhodes(freq_of(note["midi"]), note["time"], note["duration"], note["velocity"]);
+            ++b;
         }
     }
 
